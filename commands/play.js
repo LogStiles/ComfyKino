@@ -30,7 +30,7 @@ module.exports = {
                     subscription: null,
                     songs: [],
                     player: createAudioPlayer(),
-                    doesLoop: false
+                    doesLoop: false,
                 }
 
                 //add our new queue to the queueMap and the songs to the song list
@@ -46,7 +46,7 @@ module.exports = {
                         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
                     });
                     queueConstructor.connection = connection;
-                    songPlayer(message.guild);
+                    songPlayer(message.guild, Discord);
                 } catch (err) {
                     queueMap.delete(message.guild.id);
                     message.channel.send("There was an error connecting.");
@@ -91,14 +91,26 @@ const getSongName = (song) => {
     return song.name.substring(0, song.name.length - 4); //remove the ".mp3" from the song's file'
 }
 
+const getNowPlayingEmbed = (song, Discord) => {
+    const nowPlaying = new Discord.MessageEmbed()
+    .setColor(0x3498DB)
+    .setTitle("Now Playing")
+    .setFields({name: `Song Name`, value: `${getSongName(song)}`},
+               {name: `Song Origin`, value: `${song.origin}`},
+               {name: `Year`, value: `${song.year}`},
+               {name: `Composer(s)`, value: `${song.composer}`})
+    .setFooter("Oh baby that's some kino.");
+    return nowPlaying;
+}
+
 //play the current song on the serverQueue
-const songPlayer = async (guild) => {
+const songPlayer = async (guild, Discord) => {
     const songQueue = queueMap.get(guild.id);
 
     var song = songQueue.songs[0];
     songQueue.subscription = songQueue.connection.subscribe(songQueue.player);
     songQueue.player.play(createAudioResource(song.path)); //play the song
-    songQueue.textChannel.send(`Now playing ${getSongName(song)}`);
+    songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(song, Discord)] });
     
     songQueue.player.on(AudioPlayerStatus.Idle, async() => { //when the song is done playing
         if (songQueue.songs.length === 0) { //if there is no song to play
@@ -114,7 +126,7 @@ const songPlayer = async (guild) => {
             songQueue.songs.shift(); //remove the song from the queue
         }
         song = songQueue.songs[0]; //get the next song
-        songQueue.textChannel.send(`Now playing ${getSongName(song)}`);
+        songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(song, Discord)] });
         songQueue.player.play(createAudioResource(song.path)); //play the next song
     });
 }
