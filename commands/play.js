@@ -79,7 +79,6 @@ const getSongs = (serverQueue) => {
     songFiles.forEach(song => { //add the file path for each song to the queue
         serverQueue.songs.push(song);
     });
-    console.log(serverQueue.songs);
 }
 
 //play the current song on the serverQueue
@@ -90,7 +89,7 @@ const songPlayer = async (guild) => {
     var songPath = musicPath + song;
     songQueue.subscription = songQueue.connection.subscribe(songQueue.player);
     songQueue.player.play(createAudioResource(songPath)); //play the song
-    songQueue.textChannel.send(`Now playing ${song}`);
+    songQueue.textChannel.send(`Now playing ${song.substring(0,song.length - 4)}`);
     
     songQueue.player.on(AudioPlayerStatus.Idle, async() => { //when the song is done playing
         if (songQueue.songs.length === 0) { //if there is no song to play
@@ -106,10 +105,9 @@ const songPlayer = async (guild) => {
         } else {
             songQueue.songs.shift(); //remove the song from the queue
         }
-        console.log(songQueue.songs);
         song = songQueue.songs[0];
         var songPath = musicPath + song; //get the next song
-        songQueue.textChannel.send(`Now playing ${song}`);
+        songQueue.textChannel.send(`Now playing ${song.substring(0,song.length - 4)}`);
         songQueue.player.play(createAudioResource(songPath)); //play the next song
     });
 }
@@ -123,11 +121,11 @@ const skipSong = (message, serverQueue) => {
     }
     //check if there is a song to skip
     if (!serverQueue) {
-        return message.channel.send("There are no songs in the queue.");
+        return message.channel.send("There are no songs in the queue");
     }
     serverQueue.player.stop(); //stop the song
     //this sends the player into the Idle status, which starts the next song in our async function songPlayer
-    message.channel.send(`Skipped ${songName}.`);
+    message.channel.send(`Skipped ${songName.substring(0, songName.length - 4)}.`);
 }
 
 //stops the music bot and destroys the queue
@@ -161,7 +159,6 @@ const shuffleQueue = (message, serverQueue) => {
         [nonPlayingQueue[i], nonPlayingQueue[j]] = [nonPlayingQueue[j], nonPlayingQueue[i]]; // swap elements songs[i] and songs[j]
     }
     serverQueue.songs = currSong.concat(nonPlayingQueue); //stitch the newly shuffled queue back together
-    console.log(serverQueue.songs);
     return message.channel.send("The queue has been shuffled.");
 }
 
@@ -225,6 +222,6 @@ const unpauseSong = (message, serverQueue) => {
         return message.channel.send("The queue is already unpaused.")
     } else if (serverQueue.player._state.status === 'paused') {
         serverQueue.player.unpause();
-        return message.channel.send(`The queue is now unpaused. Now playing ${serverQueue.songs[0]}`);
+        return message.channel.send(`The queue is now unpaused. Now playing ${serverQueue.songs[0].substring(0, serverQueue.songs[0].length - 4)}`);
     }
 }
