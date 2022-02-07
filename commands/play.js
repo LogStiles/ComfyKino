@@ -7,7 +7,7 @@ const queueMap = new Map(); //Global map that holds the bot's queues across all 
 
 module.exports = {
     name: 'play',
-    aliases: ['skip', 'stop', 'shuffle', 'reset', 'loop', 'pause', 'unpause'], //aliases holds all other commands related to playing audio
+    aliases: ['skip', 'stop', 'shuffle', 'reset', 'loop', 'pause', 'unpause', "queue"], //aliases holds all other commands related to playing audio
     description: 'Listen to The Comfiest of Kino',
     async execute(message, args, commandName, client, Discord) {
         //check if the user is in a voice channel
@@ -31,6 +31,7 @@ module.exports = {
                     songs: [],
                     player: createAudioPlayer(),
                     doesLoop: false,
+                    currSong: null
                 }
 
                 //add our new queue to the queueMap and the songs to the song list
@@ -71,24 +72,36 @@ module.exports = {
         else if (commandName === "pause") {pauseSong(message, serverQueue);}
         //the unpause function
         else if (commandName === "unpause") {unpauseSong(message, serverQueue);}
+        //debug queue function
+        else if (commandName === "queue") {console.log(serverQueue.songs);}
     }
 }
 
 const getSongs = (serverQueue) => {
-    const songFolders = fs.readdirSync(musicPath, {withFileTypes: true}).filter(dir => dir.isDirectory()); //get all music folders into a list
-    var folderInfo;
-    songFolders.forEach(dir => { //for each music folder
-        folderInfo = JSON.parse(fs.readFileSync(musicPath + dir.name + "\\info.json")); //get the current folder's info
-        fs.readdirSync(musicPath + dir.name).filter(file=>file.endsWith('.mp3')).forEach(song => { //for each song in the current folder
-            folderInfo.name = song; //modify the object to include the current song's name
-            folderInfo.path = musicPath + dir.name + "\\" + song; //modify the object to include the current song's file path'
-            serverQueue.songs.push(JSON.parse(JSON.stringify(folderInfo))); //add the unique object to the serverQueue
-        });
-    });
+    fs.readdirSync(musicPath, {withFileTypes: true}).filter(dir => dir.isDirectory()) //get all music folders into a list
+    .forEach(dir => { //for each music folder
+        fs.readdirSync(musicPath + dir.name).filter(file=>file.endsWith('.mp3')) //get all the songs in the folder
+        .forEach(song => {
+            serverQueue.songs.push(musicPath + dir.name + "\\" + song); //add each song path to the queue
+        })
+    })
+    console.log(serverQueue.songs);
 }
 
 const getSongName = (song) => {
     return song.name.substring(0, song.name.length - 4); //remove the ".mp3" from the song's file'
+}
+
+const getSongInfo = (songPath) => {
+    //we want to get the song's name and the path of it's directory
+    var fileDirectory = songPath.split("\\"); //split the song path into its components
+    const songName = fileDirectory[fileDirectory.length - 1]; //get the file name at the end of the file path
+    var fileDirectory = fileDirectory.splice(0, fileDirectory.length - 1); //exclude the .mp3 from the file path
+    var fileDirectory = fileDirectory.join("\\"); //stitch it back together to get a path to our directory
+    const songInfo = JSON.parse(fs.readFileSync(fileDirectory + "\\info.json")) //use the common info between all files in the folder as a base
+    songInfo.name = songName; //modify the object to include the current song's name
+    songInfo.path = fileDirectory + "\\" + songName; //modify the object to include the current song's file path
+    return songInfo; //return the unique object
 }
 
 const getNowPlayingEmbed = (song, Discord) => {
@@ -107,10 +120,10 @@ const getNowPlayingEmbed = (song, Discord) => {
 const songPlayer = async (guild, Discord) => {
     const songQueue = queueMap.get(guild.id);
 
-    var song = songQueue.songs[0];
+    songQueue.currSong = getSongInfo(songQueue.songs[0]);
     songQueue.subscription = songQueue.connection.subscribe(songQueue.player);
-    songQueue.player.play(createAudioResource(song.path)); //play the song
-    songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(song, Discord)] });
+    songQueue.player.play(createAudioResource(songQueue.currSong.path)); //play the song
+    songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(songQueue.currSong, Discord)] });
     
     songQueue.player.on(AudioPlayerStatus.Idle, async() => { //when the song is done playing
         if (songQueue.songs.length === 0) { //if there is no song to play
@@ -125,15 +138,15 @@ const songPlayer = async (guild, Discord) => {
         } else {
             songQueue.songs.shift(); //remove the song from the queue
         }
-        song = songQueue.songs[0]; //get the next song
-        songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(song, Discord)] });
-        songQueue.player.play(createAudioResource(song.path)); //play the next song
+        songQueue.currSong = getSongInfo(songQueue.songs[0]); //get the next song
+        songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(songQueue.currSong, Discord)] });
+        songQueue.player.play(createAudioResource(songQueue.currSong.path)); //play the next song
     });
 }
 
 //skips the current song in the queue
 const skipSong = (message, serverQueue) => {
-    const song = serverQueue.songs[0];    
+    const song = serverQueue.currSong;    
     //check if the user is in a voice channel
     if (!message.member.voice.channel) {
         return message.channel.send("You need to be in a voice channel first.");
@@ -171,7 +184,7 @@ const shuffleQueue = (message, serverQueue) => {
     if (!serverQueue) {
         return message.channel.send("There is no queue to shuffle.");
     }
-    const currSong = [serverQueue.songs[0]]; //exclude the currently playing song, so it doesn't play again'
+    const currSong = [serverQueue.currSong.path]; //exclude the currently playing song, so it doesn't play again'
     const nonPlayingQueue = serverQueue.songs.slice(1) //section off the part of the queue we will be shuffling
     for (let i = nonPlayingQueue.length - 1; i > 0; i--) {
         let j = Math.floor(Math.random() * (i + 1)); // random index from 0 to i
@@ -189,7 +202,7 @@ const resetQueue = (message, serverQueue) => {
     if (!serverQueue) {
         return message.channel.send("There is no queue to reset.");
     }
-    const currSong = [serverQueue.songs[0]]; //exclude the currently playing song, so we can properly remove it when it ends
+    const currSong = [serverQueue.currSong.path]; //exclude the currently playing song, so we can properly remove it when it ends
     serverQueue.songs = [];
     getSongs(serverQueue);
     serverQueue.songs = currSong.concat(serverQueue.songs);
@@ -241,6 +254,6 @@ const unpauseSong = (message, serverQueue) => {
         return message.channel.send("The queue is already unpaused.")
     } else if (serverQueue.player._state.status === 'paused') {
         serverQueue.player.unpause();
-        return message.channel.send(`The queue is now unpaused. Now playing ${getSongName(serverQueue.songs[0])}`);
+        return message.channel.send(`The queue is now unpaused. Now playing ${getSongName(serverQueue.currSong)}`);
     }
 }
