@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const musicPath = __dirname + '/../music/';
+const musicPath = __dirname + '\\..\\music\\';
 
 const queueMap = new Map(); //Global map that holds the bot's queues across all servers
 
@@ -75,10 +75,20 @@ module.exports = {
 }
 
 const getSongs = (serverQueue) => {
-    const songFiles = fs.readdirSync(musicPath).filter(file => file.endsWith('.mp3')); //get all mp3 files out of the music folder
-    songFiles.forEach(song => { //add the file path for each song to the queue
-        serverQueue.songs.push(song);
+    const songFolders = fs.readdirSync(musicPath, {withFileTypes: true}).filter(dir => dir.isDirectory()); //get all music folders into a list
+    var folderInfo;
+    songFolders.forEach(dir => { //for each music folder
+        folderInfo = JSON.parse(fs.readFileSync(musicPath + dir.name + "\\info.json")); //get the current folder's info
+        fs.readdirSync(musicPath + dir.name).filter(file=>file.endsWith('.mp3')).forEach(song => { //for each song in the current folder
+            folderInfo.name = song; //modify the object to include the current song's name
+            folderInfo.path = musicPath + dir.name + "\\" + song; //modify the object to include the current song's file path'
+            serverQueue.songs.push(JSON.parse(JSON.stringify(folderInfo))); //add the unique object to the serverQueue
+        });
     });
+}
+
+const getSongName = (song) => {
+    return song.name.substring(0, song.name.length - 4); //remove the ".mp3" from the song's file'
 }
 
 //play the current song on the serverQueue
@@ -86,10 +96,9 @@ const songPlayer = async (guild) => {
     const songQueue = queueMap.get(guild.id);
 
     var song = songQueue.songs[0];
-    var songPath = musicPath + song;
     songQueue.subscription = songQueue.connection.subscribe(songQueue.player);
-    songQueue.player.play(createAudioResource(songPath)); //play the song
-    songQueue.textChannel.send(`Now playing ${song.substring(0,song.length - 4)}`);
+    songQueue.player.play(createAudioResource(song.path)); //play the song
+    songQueue.textChannel.send(`Now playing ${getSongName(song)}`);
     
     songQueue.player.on(AudioPlayerStatus.Idle, async() => { //when the song is done playing
         if (songQueue.songs.length === 0) { //if there is no song to play
@@ -99,22 +108,20 @@ const songPlayer = async (guild) => {
             queueMap.delete(guild.id); //remove the queue from the queueMap
             return;
         }
-
         if (songQueue.doesLoop) {
             songQueue.songs.push(songQueue.songs.shift()); //remove the song from the queue and push it to the end of the queue
         } else {
             songQueue.songs.shift(); //remove the song from the queue
         }
-        song = songQueue.songs[0];
-        var songPath = musicPath + song; //get the next song
-        songQueue.textChannel.send(`Now playing ${song.substring(0,song.length - 4)}`);
-        songQueue.player.play(createAudioResource(songPath)); //play the next song
+        song = songQueue.songs[0]; //get the next song
+        songQueue.textChannel.send(`Now playing ${getSongName(song)}`);
+        songQueue.player.play(createAudioResource(song.path)); //play the next song
     });
 }
 
 //skips the current song in the queue
 const skipSong = (message, serverQueue) => {
-    const songName = serverQueue.songs[0];    
+    const song = serverQueue.songs[0];    
     //check if the user is in a voice channel
     if (!message.member.voice.channel) {
         return message.channel.send("You need to be in a voice channel first.");
@@ -125,7 +132,7 @@ const skipSong = (message, serverQueue) => {
     }
     serverQueue.player.stop(); //stop the song
     //this sends the player into the Idle status, which starts the next song in our async function songPlayer
-    message.channel.send(`Skipped ${songName.substring(0, songName.length - 4)}.`);
+    message.channel.send(`Skipped ${getSongName(song)}.`);
 }
 
 //stops the music bot and destroys the queue
@@ -222,6 +229,6 @@ const unpauseSong = (message, serverQueue) => {
         return message.channel.send("The queue is already unpaused.")
     } else if (serverQueue.player._state.status === 'paused') {
         serverQueue.player.unpause();
-        return message.channel.send(`The queue is now unpaused. Now playing ${serverQueue.songs[0].substring(0, serverQueue.songs[0].length - 4)}`);
+        return message.channel.send(`The queue is now unpaused. Now playing ${getSongName(serverQueue.songs[0])}`);
     }
 }
