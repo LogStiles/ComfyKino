@@ -80,12 +80,11 @@ module.exports = {
 const getSongs = (serverQueue) => {
     fs.readdirSync(musicPath, {withFileTypes: true}).filter(dir => dir.isDirectory()) //get all music folders into a list
     .forEach(dir => { //for each music folder
-        fs.readdirSync(musicPath + dir.name).filter(file=>file.endsWith('.mp3')) //get all the songs in the folder
+        fs.readdirSync(musicPath + dir.name).filter(file=>file.endsWith('.mp3') || file.endsWith('.flac')) //get all the songs in the folder
         .forEach(song => {
             serverQueue.songs.push(musicPath + dir.name + "\\" + song); //add each song path to the queue
         })
     })
-    console.log(serverQueue.songs);
 }
 
 const getSongName = (song) => {
@@ -101,10 +100,12 @@ const getSongInfo = (songPath) => {
     const songInfo = JSON.parse(fs.readFileSync(fileDirectory + "\\info.json")) //use the common info between all files in the folder as a base
     songInfo.name = songName; //modify the object to include the current song's name
     songInfo.path = fileDirectory + "\\" + songName; //modify the object to include the current song's file path
+    songInfo.cover = fileDirectory + "\\cover.jpg"; 
     return songInfo; //return the unique object
 }
 
 const getNowPlayingEmbed = (song, Discord) => {
+    const cover = new Discord.MessageAttachment(song.cover);
     const nowPlaying = new Discord.MessageEmbed()
     .setColor(0x3498DB)
     .setTitle("Now Playing")
@@ -112,8 +113,9 @@ const getNowPlayingEmbed = (song, Discord) => {
                {name: `Song Origin`, value: `${song.origin}`},
                {name: `Year`, value: `${song.year}`},
                {name: `Composer(s)`, value: `${song.composer}`})
+    .setImage('attachment://cover.jpg')
     .setFooter("Oh baby that's some kino.");
-    return nowPlaying;
+    return {embeds: [nowPlaying], files: [cover]};
 }
 
 //play the current song on the serverQueue
@@ -123,7 +125,7 @@ const songPlayer = async (guild, Discord) => {
     songQueue.currSong = getSongInfo(songQueue.songs[0]);
     songQueue.subscription = songQueue.connection.subscribe(songQueue.player);
     songQueue.player.play(createAudioResource(songQueue.currSong.path)); //play the song
-    songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(songQueue.currSong, Discord)] });
+    songQueue.textChannel.send(getNowPlayingEmbed(songQueue.currSong, Discord));
     
     songQueue.player.on(AudioPlayerStatus.Idle, async() => { //when the song is done playing
         if (songQueue.songs.length === 0) { //if there is no song to play
@@ -139,7 +141,7 @@ const songPlayer = async (guild, Discord) => {
             songQueue.songs.shift(); //remove the song from the queue
         }
         songQueue.currSong = getSongInfo(songQueue.songs[0]); //get the next song
-        songQueue.textChannel.send({ embeds: [getNowPlayingEmbed(songQueue.currSong, Discord)] });
+        songQueue.textChannel.send(getNowPlayingEmbed(songQueue.currSong, Discord));
         songQueue.player.play(createAudioResource(songQueue.currSong.path)); //play the next song
     });
 }
@@ -206,7 +208,6 @@ const resetQueue = (message, serverQueue) => {
     serverQueue.songs = [];
     getSongs(serverQueue);
     serverQueue.songs = currSong.concat(serverQueue.songs);
-    console.log(serverQueue.songs);
 }
 
 //inverts the boolean that decides whether songs will be added to the end of the queue after playing
