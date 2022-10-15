@@ -7,7 +7,7 @@ const queueMap = new Map(); //Global map that holds the bot's queues across all 
 
 module.exports = {
     name: 'play',
-    aliases: ['skip', 'stop', 'shuffle', 'reset', 'loop', 'pause', 'unpause', "queue"], //aliases holds all other commands related to playing audio
+    aliases: ['skip', 'stop', 'shuffle', 'reset', 'loop', 'pause', 'unpause', "queue", "start"], //aliases holds all other commands related to playing audio
     description: 'Listen to The Comfiest of Kino',
     async execute(message, args, commandName, client, Discord) {
         //check if the user is in a voice channel
@@ -20,7 +20,7 @@ module.exports = {
         const serverQueue = queueMap.get(message.guild.id);
         
         //the play command
-        if (commandName === 'play') {
+        if (commandName === 'play' || commandName === 'start') {
             //construct serverQueue if it does not exist (will not exist for if a video has not been queued)
             if(!serverQueue) {
                 const queueConstructor = {
@@ -38,6 +38,13 @@ module.exports = {
                 queueMap.set(message.guild.id, queueConstructor);
                 getSongs(queueConstructor);
                 message.channel.send(`Queue Initialized`);
+
+                //a special initialization that loops the queue and shuffles it
+                if (commandName === 'start') {
+                    setLoop(message, queueConstructor, true);
+                    shuffleSilentQueue(message, queueConstructor, true);
+                    console.log(queueConstructor.songs);
+                } 
 
                 //establish the connection to the voice channel and start playing audio
                 try {
@@ -186,7 +193,7 @@ const shuffleQueue = (message, serverQueue) => {
     if (!serverQueue) {
         return message.channel.send("There is no queue to shuffle.");
     }
-    const currSong = [serverQueue.currSong.path]; //exclude the currently playing song, so it doesn't play again'
+    const currSong = [serverQueue.currSong.path]; //exclude the currently playing song, so it doesn't play again
     const nonPlayingQueue = serverQueue.songs.slice(1) //section off the part of the queue we will be shuffling
     for (let i = nonPlayingQueue.length - 1; i > 0; i--) {
         let j = Math.floor(Math.random() * (i + 1)); // random index from 0 to i
@@ -196,8 +203,27 @@ const shuffleQueue = (message, serverQueue) => {
     return message.channel.send("The queue has been shuffled.");
 }
 
+//shuffles the list of songs on the serverQueue when there is no song playing
+const shuffleSilentQueue = (message, serverQueue, silentMode = false) => {
+    if (!message.member.voice.channel) {
+        return message.channel.send("You need to be in a voice channel first.");
+    }
+    if (!serverQueue) {
+        return message.channel.send("There is no queue to shuffle.");
+    }
+    for (let i = serverQueue.songs.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1)); // random index from 0 to i
+        [serverQueue.songs[i], serverQueue.songs[j]] = [serverQueue.songs[j], serverQueue.songs[i]]; // swap elements songs[i] and songs[j]
+    }
+    if (!silentMode) {
+        return message.channel.send("The queue has been shuffled.");
+    } else {
+        console.log("The queue has been shuffled.");
+    }
+}
+
 //reset the queue, delete the current queue (except the current song) and replace it with all available songs in their default order
-const resetQueue = (message, serverQueue) => {
+const resetQueue = (message, serverQueue, silentMode = false) => {
     if (!message.member.voice.channel) {
         return message.channel.send("You need to be in a voice channel first.");
     }
@@ -211,7 +237,7 @@ const resetQueue = (message, serverQueue) => {
 }
 
 //inverts the boolean that decides whether songs will be added to the end of the queue after playing
-const setLoop = (message, serverQueue) => {
+const setLoop = (message, serverQueue, silentMode = false) => {
     if (!message.member.voice.channel) {
         return message.channel.send("You need to be in a voice channel first.");
     }
@@ -220,10 +246,18 @@ const setLoop = (message, serverQueue) => {
     }
     if (serverQueue.doesLoop) {
         serverQueue.doesLoop = false;
-        return message.channel.send("The queue is no longer in loop mode.");
+        if (!silentMode) {
+            return message.channel.send("The queue is no longer in loop mode.");
+        } else {
+            console.log("The queue is no longer in loop mode.");
+        }
     } else {
        serverQueue.doesLoop = true;
-       return message.channel.send("The queue is now in loop mode.");
+       if (!silentMode) {
+            return message.channel.send("The queue is now in loop mode.");
+       } else {
+            console.log("The queue is now in loop mode.");
+       }
     }
 }
 
