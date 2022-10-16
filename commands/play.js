@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const { CommandInteractionOptionResolver } = require('discord.js');
 const musicPath = __dirname + '\\..\\music\\';
 
 const queueMap = new Map(); //Global map that holds the bot's queues across all servers
@@ -62,7 +63,7 @@ module.exports = {
                 }
             }
             else {//if serverQueue does exist, say the bot is already playing
-                message.channel.send(`Um... I'm already playing music sweetie...'`);
+                message.channel.send(`Um... I'm already playing music sweetie...`);
             }
         }
         //the skip command
@@ -80,7 +81,7 @@ module.exports = {
         //the unpause function
         else if (commandName === "unpause") {unpauseSong(message, serverQueue);}
         //debug queue function
-        else if (commandName === "queue") {console.log(serverQueue.songs);}
+        else if (commandName === "queue") {displayQueue(message, serverQueue, Discord);}
     }
 }
 
@@ -95,7 +96,11 @@ const getSongs = (serverQueue) => {
 }
 
 const getSongName = (song) => {
-    return song.name.substring(0, song.name.length - 4); //remove the ".mp3" from the song's file'
+    if (song.endsWith(".mp3")) {
+        return song.substring(0, song.length - 4); //remove the ".mp3" from the song's file
+    } else if (song.endsWith(".flac")) {
+        return song.substring(0, song.length - 5) // remove the ".flac" from the song's file
+    }
 }
 
 const getSongInfo = (songPath) => {
@@ -116,7 +121,7 @@ const getNowPlayingEmbed = (song, Discord) => {
     const nowPlaying = new Discord.MessageEmbed()
     .setColor(0x3498DB)
     .setTitle("Now Playing")
-    .setFields({name: `Song Name`, value: `${getSongName(song)}`},
+    .setFields({name: `Song Name`, value: `${getSongName(song.name)}`},
                {name: `Song Origin`, value: `${song.origin}`},
                {name: `Year`, value: `${song.year}`},
                {name: `Composer(s)`, value: `${song.composer}`})
@@ -166,7 +171,7 @@ const skipSong = (message, serverQueue) => {
     }
     serverQueue.player.stop(); //stop the song
     //this sends the player into the Idle status, which starts the next song in our async function songPlayer
-    message.channel.send(`Skipped ${getSongName(song)}.`);
+    message.channel.send(`Skipped ${getSongName(song.name)}.`);
 }
 
 //stops the music bot and destroys the queue
@@ -289,6 +294,52 @@ const unpauseSong = (message, serverQueue) => {
         return message.channel.send("The queue is already unpaused.")
     } else if (serverQueue.player._state.status === 'paused') {
         serverQueue.player.unpause();
-        return message.channel.send(`The queue is now unpaused. Now playing ${getSongName(serverQueue.currSong)}`);
+        return message.channel.send(`The queue is now unpaused. Now playing ${getSongName(serverQueue.currSong.name)}`);
     }
+}
+
+//displays a page of the queue
+const displayQueue = (message, serverQueue, Discord) => {
+    if (!message.member.voice.channel) {
+        return message.channel.send("You need to be in a voice channel first.");
+    }
+    if (!serverQueue) {
+        return message.channel.send("There is no queue to display.");
+    }
+    //first we need to determine if the user has a page number for the queue they wish to display
+    const messageSplit = message.content.split(" "); //isolate the command's arguments using whitespace
+    var setDefaultPageNumber = true; //assume there is no custom page number
+    var pageNum = 1; //the default page number is the first page
+    const numberOfPages = Math.ceil(serverQueue.songs.length / 5); //each page will display 5 songs
+    if (messageSplit.length >= 2) { //there has to be an extra argument to work with
+        var userPageNumber = parseInt(messageSplit[1]); //the user's page number should be the second argument
+        if (!isNaN(userPageNumber)) { //it has to be a valid integer
+            if (userPageNumber >= 1 && userPageNumber <= numberOfPages) { //it has to be within an the boundaries of the number of pages on the queue
+                setDefaultPageNumber = false; //if we've met all of the previous conditions we will use the user's page number
+            } else { //send a message if page number is out of bounds
+                return message.channel.send(`Page ${userPageNumber} is out of range! The queue is currently ${numberOfPages} pages long.`);
+            }
+        }
+    }
+    if (!setDefaultPageNumber) {
+        pageNum = userPageNumber;
+    }
+
+    //set up the queue message
+    const queueDisplay = new Discord.MessageEmbed()
+    .setColor(0x3498DB)
+    .setTitle(`The Comfy Queue - Page ${pageNum} of ${numberOfPages}`);
+    var songsOfPage = ""; //start with an empty string, we display all of the page's songs with a single string
+    for (i = 0; i < 5; i++) {
+        const trueSongNumber = ((pageNum-1)*5)+i; //the number of the song when we index from 0
+        const displayedSongNumber = ((pageNum-1)*5)+i+1; //the number of the song when we index from 1
+        if (displayedSongNumber <= serverQueue.songs.length) { //check that the generated number correlates to a song
+            const songNameSplit = serverQueue.songs[trueSongNumber].split("\\"); //the song is stored as a file path, we need to format it so it can be displayed
+            const displayedSong = `${songNameSplit[songNameSplit.length - 2]} - ${getSongName(songNameSplit[songNameSplit.length - 1])}` //isolate the song name and the song origin
+            songsOfPage += `${displayedSongNumber}. ${displayedSong}\n`; //add the song name and origin to songsOfPage with a newline character
+        }
+    }
+    queueDisplay.addFields({name: `Now Playing`, value: `${songsOfPage}`});
+    queueDisplay.setFooter("Oh baby that's some kino.");
+    serverQueue.textChannel.send({ embeds: [queueDisplay]}); 
 }
