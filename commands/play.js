@@ -14,7 +14,7 @@ module.exports = {
         //check if the user is in a voice channel
         const voiceChannel = message.member.voice.channel;
         if (!voiceChannel) {
-            return message.channel.send("You need to be in a voice channel first.");
+            return message.reply("You need to be in a voice channel first.");
         }
         
         //get the queue for the current server
@@ -38,7 +38,7 @@ module.exports = {
                 //add our new queue to the queueMap and the songs to the song list
                 queueMap.set(message.guild.id, queueConstructor);
                 getSongs(queueConstructor);
-                message.channel.send(`Queue Initialized`);
+                message.reply(`Queue Initialized`);
 
                 //a special initialization that loops the queue and shuffles it
                 if (commandName === 'start') {
@@ -58,12 +58,12 @@ module.exports = {
                     songPlayer(message.guild, Discord);
                 } catch (err) {
                     queueMap.delete(message.guild.id);
-                    message.channel.send("There was an error connecting.");
+                    message.reply("There was an error connecting.");
                     throw err;
                 }
             }
             else {//if serverQueue does exist, say the bot is already playing
-                message.channel.send(`Um... I'm already playing music sweetie...`);
+                message.reply(`Um... I'm already playing music sweetie...`);
             }
         }
         //the skip command
@@ -160,43 +160,43 @@ const songPlayer = async (guild, Discord) => {
 
 //skips the current song in the queue
 const skipSong = (message, serverQueue) => {
-    const song = serverQueue.currSong;    
     //check if the user is in a voice channel
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     //check if there is a song to skip
     if (!serverQueue) {
-        return message.channel.send("There are no songs in the queue");
+        return message.reply("There are no songs in the queue");
     }
+    const song = serverQueue.currSong; 
     serverQueue.player.stop(); //stop the song
     //this sends the player into the Idle status, which starts the next song in our async function songPlayer
-    message.channel.send(`Skipped ${getSongName(song.name)}.`);
+    message.reply(`Skipped ${getSongName(song.name)}.`);
 }
 
 //stops the music bot and destroys the queue
 const stopSong = (message, serverQueue) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("In order to stop I need to be playing first.");
+        return message.reply("In order to stop I need to be playing first.");
     }
     serverQueue.player.stop();
     serverQueue.songs = [];
     serverQueue.connection.destroy(); //leave the channel
     serverQueue.subscription.unsubscribe();
     queueMap.delete(message.guild.id); //remove the queue from the queueMap
-    return message.channel.send("Stopped playing and deleted the queue.");
+    return message.reply("Stopped playing and deleted the queue.");
 }
 
 //shuffles the list of songs on the serverQueue
 const shuffleQueue = (message, serverQueue) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to shuffle.");
+        return message.reply("There is no queue to shuffle.");
     }
     const currSong = [serverQueue.currSong.path]; //exclude the currently playing song, so it doesn't play again
     const nonPlayingQueue = serverQueue.songs.slice(1) //section off the part of the queue we will be shuffling
@@ -205,23 +205,23 @@ const shuffleQueue = (message, serverQueue) => {
         [nonPlayingQueue[i], nonPlayingQueue[j]] = [nonPlayingQueue[j], nonPlayingQueue[i]]; // swap elements songs[i] and songs[j]
     }
     serverQueue.songs = currSong.concat(nonPlayingQueue); //stitch the newly shuffled queue back together
-    return message.channel.send("The queue has been shuffled.");
+    return message.reply("The queue has been shuffled.");
 }
 
 //shuffles the list of songs on the serverQueue when there is no song playing
 const shuffleSilentQueue = (message, serverQueue, silentMode = false) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to shuffle.");
+        return message.reply("There is no queue to shuffle.");
     }
     for (let i = serverQueue.songs.length - 1; i > 0; i--) {
         let j = Math.floor(Math.random() * (i + 1)); // random index from 0 to i
         [serverQueue.songs[i], serverQueue.songs[j]] = [serverQueue.songs[j], serverQueue.songs[i]]; // swap elements songs[i] and songs[j]
     }
     if (!silentMode) {
-        return message.channel.send("The queue has been shuffled.");
+        return message.reply("The queue has been shuffled.");
     } else {
         console.log("The queue has been shuffled.");
     }
@@ -230,10 +230,10 @@ const shuffleSilentQueue = (message, serverQueue, silentMode = false) => {
 //reset the queue, delete the current queue (except the current song) and replace it with all available songs in their default order
 const resetQueue = (message, serverQueue, silentMode = false) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to reset.");
+        return message.reply("There is no queue to reset.");
     }
     const currSong = [serverQueue.currSong.path]; //exclude the currently playing song, so we can properly remove it when it ends
     serverQueue.songs = [];
@@ -244,22 +244,22 @@ const resetQueue = (message, serverQueue, silentMode = false) => {
 //inverts the boolean that decides whether songs will be added to the end of the queue after playing
 const setLoop = (message, serverQueue, silentMode = false) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to loop.");
+        return message.reply("There is no queue to loop.");
     }
     if (serverQueue.doesLoop) {
         serverQueue.doesLoop = false;
         if (!silentMode) {
-            return message.channel.send("The queue is no longer in loop mode.");
+            return message.reply("The queue is no longer in loop mode.");
         } else {
             console.log("The queue is no longer in loop mode.");
         }
     } else {
        serverQueue.doesLoop = true;
        if (!silentMode) {
-            return message.channel.send("The queue is now in loop mode.");
+            return message.reply("The queue is now in loop mode.");
        } else {
             console.log("The queue is now in loop mode.");
        }
@@ -269,42 +269,42 @@ const setLoop = (message, serverQueue, silentMode = false) => {
 //pauses the audio player
 const pauseSong = (message, serverQueue) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to pause.");
+        return message.reply("There is no queue to pause.");
     }
     if (serverQueue.player._state.status === 'playing') {
         serverQueue.player.pause();
-        return message.channel.send("The queue is now paused.");
+        return message.reply("The queue is now paused.");
     } else if (serverQueue.player._state.status === 'paused') {
-        return message.channel.send("The queue is already paused.");
+        return message.reply("The queue is already paused.");
     }
 }
 
 //unpauses the audio player
 const unpauseSong = (message, serverQueue) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to unpause.");
+        return message.reply("There is no queue to unpause.");
     }
     if (serverQueue.player._state.status === 'playing') {
-        return message.channel.send("The queue is already unpaused.")
+        return message.reply("The queue is already unpaused.")
     } else if (serverQueue.player._state.status === 'paused') {
         serverQueue.player.unpause();
-        return message.channel.send(`The queue is now unpaused. Now playing ${getSongName(serverQueue.currSong.name)}`);
+        return message.reply(`The queue is now unpaused. Now playing ${getSongName(serverQueue.currSong.name)}`);
     }
 }
 
 //displays a page of the queue
-const displayQueue = (message, serverQueue, Discord) => {
+const displayQueue = async (message, serverQueue, Discord) => {
     if (!message.member.voice.channel) {
-        return message.channel.send("You need to be in a voice channel first.");
+        return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
-        return message.channel.send("There is no queue to display.");
+        return message.reply("There is no queue to display.");
     }
     //first we need to determine if the user has a page number for the queue they wish to display
     const messageSplit = message.content.split(" "); //isolate the command's arguments using whitespace
@@ -317,7 +317,7 @@ const displayQueue = (message, serverQueue, Discord) => {
             if (userPageNumber >= 1 && userPageNumber <= numberOfPages) { //it has to be within an the boundaries of the number of pages on the queue
                 setDefaultPageNumber = false; //if we've met all of the previous conditions we will use the user's page number
             } else { //send a message if page number is out of bounds
-                return message.channel.send(`Page ${userPageNumber} is out of range! The queue is currently ${numberOfPages} pages long.`);
+                return message.reply(`Page ${userPageNumber} is out of range! The queue is currently ${numberOfPages} pages long.`);
             }
         }
     }
@@ -341,5 +341,18 @@ const displayQueue = (message, serverQueue, Discord) => {
     }
     queueDisplay.addFields({name: `Now Playing`, value: `${songsOfPage}`});
     queueDisplay.setFooter("Oh baby that's some kino.");
-    serverQueue.textChannel.send({ embeds: [queueDisplay]}); 
+    const queueMessage = await message.reply({embeds: [queueDisplay]});
+    try {
+        if (pageNum !== 1) {
+            await queueMessage.react('⏮');
+            await queueMessage.react('◀')    
+        }
+        await queueMessage.react('🔀');
+        if (pageNum !== numberOfPages) {
+            await queueMessage.react('▶');
+            await queueMessage.react('⏭');
+        } 
+    } catch (error) {
+        console.error('One of the emojis failed to react:', error);
+    }
 }
