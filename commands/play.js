@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { CommandInteractionOptionResolver } = require('discord.js');
+const { CommandInteractionOptionResolver, Interaction, Collector, MessageActionRow } = require('discord.js');
 const musicPath = __dirname + '\\..\\music\\';
 
 const queueMap = new Map(); //Global map that holds the bot's queues across all servers
@@ -44,7 +44,7 @@ module.exports = {
                 if (commandName === 'start') {
                     setLoop(message, queueConstructor, true);
                     shuffleSilentQueue(message, queueConstructor, true);
-                    console.log(queueConstructor.songs);
+                    //console.log(queueConstructor.songs);
                 } 
 
                 //establish the connection to the voice channel and start playing audio
@@ -299,30 +299,38 @@ const unpauseSong = (message, serverQueue) => {
 }
 
 //displays a page of the queue
-const displayQueue = async (message, serverQueue, Discord) => {
+const displayQueue = async (message, serverQueue, Discord, autoPageNum=-1) => {
     if (!message.member.voice.channel) {
         return message.reply("You need to be in a voice channel first.");
     }
     if (!serverQueue) {
         return message.reply("There is no queue to display.");
     }
-    //first we need to determine if the user has a page number for the queue they wish to display
-    const messageSplit = message.content.split(" "); //isolate the command's arguments using whitespace
-    var setDefaultPageNumber = true; //assume there is no custom page number
-    var pageNum = 1; //the default page number is the first page
+
     const numberOfPages = Math.ceil(serverQueue.songs.length / 5); //each page will display 5 songs
-    if (messageSplit.length >= 2) { //there has to be an extra argument to work with
-        var userPageNumber = parseInt(messageSplit[1]); //the user's page number should be the second argument
-        if (!isNaN(userPageNumber)) { //it has to be a valid integer
-            if (userPageNumber >= 1 && userPageNumber <= numberOfPages) { //it has to be within an the boundaries of the number of pages on the queue
-                setDefaultPageNumber = false; //if we've met all of the previous conditions we will use the user's page number
-            } else { //send a message if page number is out of bounds
-                return message.reply(`Page ${userPageNumber} is out of range! The queue is currently ${numberOfPages} pages long.`);
+    if (autoPageNum === -1) { //the autoPageNum is set to -1 by default, and cannot be influenced directly by the user, only through the use of emojis
+        //first we need to determine if the user has a page number for the queue they wish to display
+        const messageSplit = message.content.split(" "); //isolate the command's arguments using whitespace
+        var setDefaultPageNumber = true; //assume there is no custom page number
+        var pageNum = 1; //the default page number is the first page
+        if (messageSplit.length >= 2) { //there has to be an extra argument to work with
+            var userPageNumber = parseInt(messageSplit[1]); //the user's page number should be the second argument
+            if (!isNaN(userPageNumber)) { //it has to be a valid integer
+                if (userPageNumber >= 1 && userPageNumber <= numberOfPages) { //it has to be within an the boundaries of the number of pages on the queue
+                    setDefaultPageNumber = false; //if we've met all of the previous conditions we will use the user's page number
+                } else { //send a message if page number is out of bounds
+                    return message.reply(`Page ${userPageNumber} is out of range! The queue is currently ${numberOfPages} pages long.`);
+                }
             }
         }
-    }
-    if (!setDefaultPageNumber) {
-        pageNum = userPageNumber;
+        if (!setDefaultPageNumber) {
+            pageNum = userPageNumber;
+        }
+    } else {
+        var pageNum = autoPageNum //if autoPageNum is set we always use it
+        if (pageNum > numberOfPages) { //check just in case of weird time situation
+            return message.reply(`Page ${userPageNumber} is out of range! The queue is currently ${numberOfPages} pages long.`);
+        }
     }
 
     //set up the queue message
@@ -341,7 +349,14 @@ const displayQueue = async (message, serverQueue, Discord) => {
     }
     queueDisplay.addFields({name: `Now Playing`, value: `${songsOfPage}`});
     queueDisplay.setFooter("Oh baby that's some kino.");
-    const queueMessage = await message.reply({embeds: [queueDisplay]});
+
+    const filter = (reaction,user) => { //checks if reaction to the queue message was one of the displayed emojis
+        //console.log(reaction);
+        //console.log(user);
+        return ['⏮','◀','🔀','▶','⏭'].includes(reaction.emoji.name) && message.author.id === user.id;
+    };
+
+    const queueMessage = await message.channel.send({embeds: [queueDisplay]});
     try {
         if (pageNum !== 1) {
             await queueMessage.react('⏮');
@@ -355,4 +370,31 @@ const displayQueue = async (message, serverQueue, Discord) => {
     } catch (error) {
         console.error('One of the emojis failed to react:', error);
     }
+    
+    const reactionCollector = queueMessage.createReactionCollector({filter, max:1, time:10000});
+
+    reactionCollector.on('collect', (reaction, user) => {
+        //console.log(reaction)
+        //console.log(user)
+        if (reaction.emoji.name === '⏮' && pageNum !== 1) { //go to first page and double check that page is right (user could have manually added the emoji)
+            console.log("First");
+            displayQueue(message, serverQueue, Discord, 1);
+        } else if (reaction.emoji.name === '◀' && pageNum !== 1) { //go to previous page and double check that page is right
+            console.log("Prev");
+            displayQueue(message, serverQueue, Discord, pageNum-1);
+        } else if (reaction.emoji.name === '🔀') { //shuffle queue
+            console.log("Shuffle");
+            shuffleQueue(message, serverQueue);
+        } else if (reaction.emoji.name === '▶' && pageNum !== numberOfPages) { //go to next page and double check that page is right
+            console.log("Next");
+            displayQueue(message, serverQueue, Discord, pageNum+1);
+        } else if (pageNum !== numberOfPages) { //go to last page and double check that page is right (we don't need to check for the emoji since we already filtered for it)
+            console.log("Last");
+            displayQueue(message, serverQueue, Discord, Math.ceil(serverQueue.songs.length / 5)); //recalculate just in case of weird time situation
+        }
+    });
+
+    reactionCollector.on('end', collected => {
+        console.log("reactionCollector closed");
+    });
 }
