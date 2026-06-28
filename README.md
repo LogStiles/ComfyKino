@@ -15,6 +15,9 @@ ComfyKino is a Discord bot that plays music in a voice channel. Point it at a fo
 - `/loop` — Toggles whether the queue loops back to the start when it reaches the end.
 - `/queue [page]` — Displays a page of the current queue, 5 songs at a time.
 - `/nowplaying` — Reposts the "Now Playing" embed for the current song.
+- `/setvolume <amount>` — Sets the playback volume to an exact percentage (1-100).
+- `/adjustvolume <amount>` — Adjusts the playback volume by a relative amount (positive or negative), clamped to 1-100.
+- `/volume` — Displays the current volume.
 
 ## Usage
 
