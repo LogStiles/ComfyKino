@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
 const { token } = require('./config.json');
+const { queueMap } = require('./lib/musicQueue');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessageReactions] }); 
 
@@ -48,5 +49,27 @@ client.on(Events.InteractionCreate, async interaction => { //execute commands
 		}
 	}
 });
+
+const shutdown = async (signal) => {
+	console.log(`Received ${signal}, shutting down...`);
+	for (const [guildId, serverQueue] of queueMap) {
+		try {
+			serverQueue.player.stop();
+			serverQueue.subscription?.unsubscribe();
+			serverQueue.connection.destroy();
+		} catch (err) {
+			console.error(`Error cleaning up queue for guild ${guildId}:`, err);
+		}
+	}
+	queueMap.clear();
+	// give the gateway a moment to actually flush the "leave channel" voice-state-update
+	// before closing the websocket, otherwise the bot's destroy() never reaches Discord
+	await new Promise(resolve => setTimeout(resolve, 1_000));
+	client.destroy();
+	process.exit(0);
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 client.login(token);
