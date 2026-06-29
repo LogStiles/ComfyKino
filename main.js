@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
 const { token } = require('./config.json');
-const { queueMap } = require('./lib/musicQueue');
+const { queueMap, handleVoiceStateUpdate } = require('./lib/musicQueue');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessageReactions] }); 
 
@@ -50,10 +50,15 @@ client.on(Events.InteractionCreate, async interaction => { //execute commands
 	}
 });
 
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+	handleVoiceStateUpdate(oldState, newState);
+});
+
 const shutdown = async (signal) => {
 	console.log(`Received ${signal}, shutting down...`);
 	for (const [guildId, serverQueue] of queueMap) {
 		try {
+			clearTimeout(serverQueue.emptyChannelTimeout);
 			serverQueue.player.stop();
 			serverQueue.subscription?.unsubscribe();
 			serverQueue.connection.destroy();
